@@ -1,0 +1,6 @@
+{
+  "name": "Realto - Nigerian Real Estate Marketplace",
+  "description": "Admin-governed Nigerian real estate marketplace featuring change request auditing, private draft workflows, developer spaces, and centralized administration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
