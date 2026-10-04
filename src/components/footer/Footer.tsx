@@ -22,11 +22,11 @@ export const Footer: React.FC<Props> = ({ onNavigate }) => {
               </span>
             </div>
             <p className="text-slate-400 text-xs leading-relaxed">
-              Nigeria&apos;s admin-governed real estate exchange. Every listing is title-vetted, physically inspected, and transaction-audited by Realto Administration.
+              Nigeria&apos;s admin-governed real estate exchange. All listings require administrative review, audited change requests, and centralized inquiry facilitation.
             </p>
             <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-semibold">
               <Shield className="w-3.5 h-3.5" />
-              <span>Zero-Fraud Escrow Protocol</span>
+              <span>Admin Verification Protocol</span>
             </div>
           </div>
 

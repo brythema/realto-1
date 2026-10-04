@@ -52,12 +52,30 @@ export interface PropertySpecifications {
   furnishing?: 'FURNISHED' | 'SEMI_FURNISHED' | 'UNFURNISHED';
 }
 
+export type PropertyType =
+  | 'DETACHED_DUPLEX'
+  | 'SEMI_DETACHED_DUPLEX'
+  | 'TERRACE_DUPLEX'
+  | 'BUNGALOW'
+  | 'PENTHOUSE'
+  | 'MAISONETTE'
+  | 'STANDARD_APARTMENT'
+  | 'MINI_FLAT'
+  | 'SELF_CONTAIN'
+  | 'RESIDENTIAL_LAND'
+  | 'COMMERCIAL_LAND'
+  | 'MIXED_USE_LAND'
+  | 'OFFICE_SPACE'
+  | 'SHOP_RETAIL'
+  | 'WAREHOUSE'
+  | string;
+
 export interface Property {
   id: string; // e.g. RTL-00104
   slug: string;
   title: string;
   category: PropertyCategory;
-  propertyType: string; // e.g. DETACHED_DUPLEX, MINI_FLAT, RESIDENTIAL_LAND
+  propertyType: PropertyType; // e.g. DETACHED_DUPLEX, MINI_FLAT, RESIDENTIAL_LAND
   price: {
     amount: number;
     currency: 'NGN';
@@ -98,5 +116,6 @@ export interface Property {
     exactAddress: string;
     ownershipDetails: string;
     internalAdminNotes?: string;
+    submittedKycDoc?: string;
   };
 }

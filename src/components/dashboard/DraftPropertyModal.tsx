@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
-import { Property, PropertyCategory } from '../../types/property';
+import { Property, PropertyCategory, PropertyType } from '../../types/property';
 import { useMarketplace } from '../../context/MarketplaceContext';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
 import {
   X,
   Save,
   Send,
   Building,
-  Home,
-  MapPin,
-  Layers,
-  FileCheck,
-  CheckCircle2,
+  Upload,
   AlertCircle,
+  FileText,
   Image as ImageIcon,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface Props {
@@ -27,44 +26,111 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
   const { currentUser } = useAuth();
 
   const isEditing = !!draftToEdit;
+  const isRejected = draftToEdit?.status === 'REJECTED';
 
-  // Form State
+  // Form State: clean initial values, no junk prefilled!
   const [title, setTitle] = useState(draftToEdit?.title || '');
   const [category, setCategory] = useState<PropertyCategory>(draftToEdit?.category || 'HOUSE');
-  const [propertyType, setPropertyType] = useState(draftToEdit?.propertyType || 'DETACHED_DUPLEX');
-  const [amount, setAmount] = useState(draftToEdit?.price?.amount?.toString() || '75000000');
+  const [propertyType, setPropertyType] = useState<PropertyType>(
+    draftToEdit?.propertyType || 'DETACHED_DUPLEX'
+  );
+  const [amount, setAmount] = useState(draftToEdit?.price?.amount ? draftToEdit.price.amount.toString() : '');
   const [negotiable, setNegotiable] = useState(draftToEdit?.price?.negotiable ?? true);
 
-  const [state, setState] = useState(draftToEdit?.location?.state || 'Lagos');
-  const [city, setCity] = useState(draftToEdit?.location?.city || 'Lekki');
-  const [area, setArea] = useState(draftToEdit?.location?.area || 'Lekki Phase 1');
+  const [state, setState] = useState(draftToEdit?.location?.state || currentUser?.state || 'Lagos');
+  const [city, setCity] = useState(draftToEdit?.location?.city || currentUser?.city || '');
+  const [area, setArea] = useState(draftToEdit?.location?.area || '');
   const [estate, setEstate] = useState(draftToEdit?.location?.estate || '');
   const [exactAddress, setExactAddress] = useState(draftToEdit?.privateDetails?.exactAddress || '');
 
-  const [bedrooms, setBedrooms] = useState(draftToEdit?.specifications?.bedrooms?.toString() || '4');
-  const [bathrooms, setBathrooms] = useState(draftToEdit?.specifications?.bathrooms?.toString() || '4');
-  const [landSize, setLandSize] = useState(draftToEdit?.specifications?.landSize?.toString() || '500');
+  const [bedrooms, setBedrooms] = useState(
+    draftToEdit?.specifications?.bedrooms !== undefined ? draftToEdit.specifications.bedrooms.toString() : ''
+  );
+  const [bathrooms, setBathrooms] = useState(
+    draftToEdit?.specifications?.bathrooms !== undefined ? draftToEdit.specifications.bathrooms.toString() : ''
+  );
+  const [landSize, setLandSize] = useState(
+    draftToEdit?.specifications?.landSize !== undefined ? draftToEdit.specifications.landSize.toString() : ''
+  );
   const [landSizeUnit, setLandSizeUnit] = useState<'SQM' | 'PLOT' | 'HECTARE'>(
     draftToEdit?.specifications?.landSizeUnit || 'SQM'
   );
   const [titleDocument, setTitleDocument] = useState(
-    draftToEdit?.specifications?.titleDocument || 'GOVERNORS_CONSENT'
+    draftToEdit?.specifications?.titleDocument || 'C_OF_O'
   );
 
-  const [description, setDescription] = useState(
-    draftToEdit?.description ||
-      'Exquisite, newly constructed property with premium architectural finish, fitted kitchen, and secure estate perimeter.'
-  );
+  const [description, setDescription] = useState(draftToEdit?.description || '');
+  const [imageUrl, setImageUrl] = useState(draftToEdit?.coverImageUrl || '');
+  const [kycDocUrl, setKycDocUrl] = useState(draftToEdit?.privateDetails?.submittedKycDoc || '');
+  const [kycDocName, setKycDocName] = useState('');
 
-  const [imageUrl, setImageUrl] = useState(
-    draftToEdit?.coverImageUrl ||
-      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1000&auto=format&fit=crop&q=80'
-  );
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
+  // Real file upload handler with base64 conversion and MIME verification
+  const handleFileUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'IMAGE' | 'DOCUMENT'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check size limit: max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      setValidationError('File size exceeds the 5MB limit.');
+      return;
+    }
+
+    if (type === 'IMAGE' && !file.type.startsWith('image/')) {
+      setValidationError('Please select an image file (JPEG, PNG, WEBP).');
+      return;
+    }
+
+    if (
+      type === 'DOCUMENT' &&
+      !file.type.startsWith('image/') &&
+      file.type !== 'application/pdf'
+    ) {
+      setValidationError('Please select a valid document (PDF, PNG, or JPEG).');
+      return;
+    }
+
+    setValidationError(null);
+    if (type === 'IMAGE') setUploadingImage(true);
+    if (type === 'DOCUMENT') setUploadingDoc(true);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string;
+        const uploaded = await api.upload.uploadFile(file.name, base64Data, file.type);
+        if (type === 'IMAGE') {
+          setImageUrl(uploaded.url);
+        } else {
+          setKycDocUrl(uploaded.url);
+          setKycDocName(file.name);
+        }
+      } catch (err: any) {
+        setValidationError(err.message || 'File upload failed.');
+      } finally {
+        setUploadingImage(false);
+        setUploadingDoc(false);
+      }
+    };
+    reader.onerror = () => {
+      setValidationError('Failed to read file.');
+      setUploadingImage(false);
+      setUploadingDoc(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const buildPayload = (): Partial<Property> => ({
-    title,
+    title: title.trim(),
     category,
     propertyType,
     price: {
@@ -75,11 +141,11 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
     location: {
       state,
       stateSlug: state.toLowerCase().replace(/\s+/g, '-'),
-      city,
-      citySlug: city.toLowerCase().replace(/\s+/g, '-'),
-      area,
-      areaSlug: area.toLowerCase().replace(/\s+/g, '-'),
-      estate: estate || undefined,
+      city: city.trim(),
+      citySlug: city.trim().toLowerCase().replace(/\s+/g, '-'),
+      area: area.trim(),
+      areaSlug: area.trim().toLowerCase().replace(/\s+/g, '-'),
+      estate: estate.trim() || undefined,
     },
     specifications: {
       bedrooms: category === 'LAND' ? undefined : Number(bedrooms) || undefined,
@@ -88,40 +154,82 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
       landSizeUnit,
       titleDocument: titleDocument as any,
     },
-    description,
-    features: ['24/7 Security', 'Borehole & Treated Water', 'Good Paved Road Frontage'],
+    description: description.trim(),
+    features: ['Security Guard Patrol', 'Borehole & Water Treatment', 'Paved Road Access'],
     coverImageUrl: imageUrl,
-    images: [{ id: 'img-1', url: imageUrl, order: 1, isCover: true }],
+    images: imageUrl ? [{ id: 'img-1', url: imageUrl, order: 1, isCover: true }] : [],
     privateDetails: {
-      exactAddress: exactAddress || `${area}, ${city}`,
-      ownershipDetails: 'Direct owner title registered with state authorities.',
+      exactAddress: exactAddress.trim() || `${area}, ${city}`,
+      ownershipDetails: 'Deed and title documentation verified during admin review.',
+      submittedKycDoc: kycDocUrl || undefined,
     },
   });
 
-  const handleSaveDraft = () => {
-    const payload = buildPayload();
-    if (isEditing && draftToEdit) {
-      updateDraft(draftToEdit.id, payload);
-    } else {
-      createDraft(payload);
+  const handleSaveDraft = async () => {
+    setIsSubmitting(true);
+    setValidationError(null);
+    try {
+      const payload = buildPayload();
+      if (isEditing && draftToEdit) {
+        await updateDraft(draftToEdit.id, payload);
+      } else {
+        await createDraft(payload);
+      }
+      onClose();
+    } catch (err: any) {
+      setValidationError(err.message || 'Failed to save draft.');
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
-  const handleSubmitForReview = () => {
-    const payload = buildPayload();
-    let targetId = draftToEdit?.id;
-    if (isEditing && draftToEdit) {
-      updateDraft(draftToEdit.id, payload);
-    } else {
-      const created = createDraft(payload);
-      targetId = created.id;
+  const handleSubmitForReview = async () => {
+    setValidationError(null);
+
+    // Strict validation to prevent junk reaching queue
+    if (!title.trim() || title.trim().length < 5) {
+      setValidationError('Property title must be at least 5 characters long.');
+      return;
+    }
+    const numAmount = Number(amount);
+    if (!amount || isNaN(numAmount) || numAmount <= 0) {
+      setValidationError('Please specify a valid asking price greater than ₦0.');
+      return;
+    }
+    if (!city.trim() || !area.trim()) {
+      setValidationError('Both City and Neighborhood/Area are mandatory for verification.');
+      return;
+    }
+    if (!imageUrl) {
+      setValidationError('Please upload at least one verified property photo or provide a photo URL.');
+      return;
+    }
+    if (description.trim().length < 15) {
+      setValidationError('Please provide a descriptive overview of the property (min 15 characters).');
+      return;
     }
 
-    if (targetId) {
-      submitDraftForReview(targetId);
+    setIsSubmitting(true);
+    try {
+      const payload = buildPayload();
+      let targetId = draftToEdit?.id;
+
+      if (isEditing && draftToEdit) {
+        await updateDraft(draftToEdit.id, payload);
+      } else {
+        const created = await createDraft(payload);
+        targetId = created.id;
+      }
+
+      if (targetId) {
+        await submitDraftForReview(targetId);
+      }
+      onClose();
+    } catch (err: any) {
+      setValidationError(err.message || 'Failed to submit property for review.');
+    } finally {
+      setIsSubmitting(false);
     }
-    onClose();
   };
 
   return (
@@ -132,10 +240,14 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
           <div>
             <h2 className="font-bold text-slate-900 text-lg flex items-center gap-2">
               <Building className="w-5 h-5 text-emerald-600" />
-              {isEditing ? 'Edit Private Draft Listing' : 'Assemble New Property Draft'}
+              {isEditing
+                ? isRejected
+                  ? 'Revise & Resubmit Rejected Listing'
+                  : 'Edit Private Draft Listing'
+                : 'Assemble New Property Draft'}
             </h2>
             <p className="text-xs text-slate-500">
-              Private Workspace: Drafts are saved privately and do not affect public data.
+              Private Workspace: Drafts never affect public data until verified and approved.
             </p>
           </div>
           <button
@@ -148,133 +260,120 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
 
         {/* Scrollable Form Body */}
         <div className="overflow-y-auto p-6 space-y-5 flex-1">
-          {/* Informational Callout */}
-          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-2xl flex items-start gap-3 text-xs text-blue-900">
-            <AlertCircle className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold block">Private Draft vs. Live Data Isolation</span>
-              You can save, tweak, and organize your draft as many times as you want without triggering admin notifications. When complete, click &ldquo;Submit for Review&rdquo; to create a formal <code>PROPERTY_SUBMIT</code> Change Request.
+          {/* Rejection Feedback Banner if fixing a rejected listing */}
+          {isRejected && draftToEdit?.lastDecisionReason && (
+            <div className="p-4 bg-amber-50 border border-amber-300 rounded-2xl text-xs text-amber-950 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-sm block text-amber-900">
+                  Administrator Correction Required
+                </span>
+                <p className="mt-1 leading-relaxed">
+                  Reason provided by Realto Admin: &ldquo;{draftToEdit.lastDecisionReason}&rdquo;
+                </p>
+                <p className="mt-1 text-slate-600">
+                  Please update the details or documents below and click &ldquo;Submit for Admin Review&rdquo; to resubmit.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
+
+          {validationError && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 font-medium">
+              {validationError}
+            </div>
+          )}
 
           {/* Title */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Property Headline / Title
+              Property Title <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Luxurious 4-Bedroom Fully Detached Duplex with Swimming Pool"
-              className="w-full text-xs p-3 rounded-xl border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-hidden font-medium"
+              placeholder="e.g. Contemporary 4-Bedroom Semi-Detached Duplex with BQ"
+              className="w-full text-xs p-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-hidden font-medium"
             />
           </div>
 
           {/* Category & Property Type */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Taxonomy Category <span className="text-rose-500">*</span>
+              </label>
               <select
                 value={category}
-                onChange={(e) => {
-                  const cat = e.target.value as PropertyCategory;
-                  setCategory(cat);
-                  if (cat === 'HOUSE') setPropertyType('DETACHED_DUPLEX');
-                  if (cat === 'FLAT_APARTMENT') setPropertyType('MINI_FLAT');
-                  if (cat === 'LAND') setPropertyType('RESIDENTIAL_LAND');
-                  if (cat === 'COMMERCIAL') setPropertyType('PLAZA_COMPLEX_MALL');
-                }}
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 outline-hidden bg-white"
+                onChange={(e) => setCategory(e.target.value as PropertyCategory)}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white focus:border-emerald-600 outline-hidden"
               >
-                <option value="HOUSE">House</option>
-                <option value="FLAT_APARTMENT">Flat & Apartment</option>
-                <option value="LAND">Land Parcel</option>
-                <option value="COMMERCIAL">Commercial Property</option>
+                <option value="HOUSE">House / Duplex / Terrace</option>
+                <option value="FLAT_APARTMENT">Flat / Apartment / Maisonette</option>
+                <option value="LAND">Land / Plot / Site</option>
+                <option value="COMMERCIAL">Commercial (Office / Retail / Warehouse)</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Property Classification
+                Property Architecture
               </label>
               <select
                 value={propertyType}
-                onChange={(e) => setPropertyType(e.target.value)}
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 outline-hidden bg-white"
+                onChange={(e) => setPropertyType(e.target.value as PropertyType)}
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white focus:border-emerald-600 outline-hidden"
               >
-                {category === 'HOUSE' && (
-                  <>
-                    <option value="DETACHED_DUPLEX">Fully Detached Duplex</option>
-                    <option value="SEMI_DETACHED_DUPLEX">Semi-Detached Duplex</option>
-                    <option value="TERRACED_DUPLEX">Terraced Duplex</option>
-                    <option value="DETACHED_BUNGALOW">Detached Bungalow</option>
-                    <option value="BLOCK_OF_FLATS">Block of Flats</option>
-                  </>
-                )}
-                {category === 'FLAT_APARTMENT' && (
-                  <>
-                    <option value="MINI_FLAT">Mini Flat (Room & Parlour)</option>
-                    <option value="SELF_CONTAIN">Self-Contained Single Room</option>
-                    <option value="STANDARD_APARTMENT">Standard Apartment</option>
-                    <option value="PENTHOUSE">Luxury Penthouse</option>
-                  </>
-                )}
-                {category === 'LAND' && (
-                  <>
-                    <option value="RESIDENTIAL_LAND">Residential Land</option>
-                    <option value="COMMERCIAL_LAND">Commercial Land</option>
-                    <option value="INDUSTRIAL_LAND">Industrial Land</option>
-                    <option value="MIXED_USE_LAND">Mixed-Use Land</option>
-                  </>
-                )}
-                {category === 'COMMERCIAL' && (
-                  <>
-                    <option value="PLAZA_COMPLEX_MALL">Plaza / Shopping Complex</option>
-                    <option value="OFFICE_SPACE">Office Space</option>
-                    <option value="WAREHOUSE">Warehouse</option>
-                    <option value="HOTEL_GUEST_HOUSE">Hotel / Guest House</option>
-                  </>
-                )}
+                <option value="DETACHED_DUPLEX">Detached Duplex</option>
+                <option value="SEMI_DETACHED_DUPLEX">Semi-Detached Duplex</option>
+                <option value="TERRACE_DUPLEX">Terraced Duplex</option>
+                <option value="BUNGALOW">Bungalow</option>
+                <option value="PENTHOUSE">Penthouse</option>
+                <option value="MAISONETTE">Maisonette</option>
+                <option value="STANDARD_APARTMENT">Standard Flat / Apartment</option>
+                <option value="RESIDENTIAL_LAND">Residential Land</option>
+                <option value="COMMERCIAL_LAND">Commercial Land</option>
+                <option value="OFFICE_SPACE">Office Complex / Floor</option>
               </select>
             </div>
           </div>
 
-          {/* Price & Negotiation */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Pricing */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-100 pt-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Asking Price (NGN ₦)
+                Asking Price (NGN ₦) <span className="text-rose-500">*</span>
               </label>
               <input
                 type="number"
+                min={1}
                 required
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                placeholder="75000000"
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-hidden font-bold"
+                placeholder="e.g. 85000000"
+                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 outline-hidden font-bold"
               />
             </div>
             <div className="flex items-center gap-2 pt-6">
               <input
                 type="checkbox"
-                id="nego"
+                id="nego-draft"
                 checked={negotiable}
                 onChange={(e) => setNegotiable(e.target.checked)}
                 className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4"
               />
-              <label htmlFor="nego" className="text-xs font-semibold text-slate-700 cursor-pointer">
-                Price is Negotiable
+              <label htmlFor="nego-draft" className="text-xs font-semibold text-slate-700 cursor-pointer">
+                Price is Open to Negotiation
               </label>
             </div>
           </div>
 
-          {/* Location details */}
-          <div className="border-t border-slate-100 pt-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-              General Location (Public)
+          {/* Nigerian Location Hierarchy */}
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Location Breakdown
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -282,83 +381,78 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
                 <select
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 bg-white"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-300 bg-white"
                 >
-                  <option value="Lagos">Lagos State</option>
+                  <option value="Lagos">Lagos</option>
                   <option value="Abuja (FCT)">Abuja (FCT)</option>
-                  <option value="Oyo">Oyo (Ibadan)</option>
-                  <option value="Rivers">Rivers (Port Harcourt)</option>
-                  <option value="Ogun">Ogun State</option>
+                  <option value="Oyo">Oyo</option>
+                  <option value="Rivers">Rivers</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">City</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  City / Town <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
                   required
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Lekki"
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 outline-hidden"
+                  placeholder="e.g. Lekki, Ikoyi, Maitama"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-300"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Area / Neighbourhood
+                  Neighborhood / Area <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
-                  placeholder="e.g. Lekki Phase 1"
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 outline-hidden"
+                  placeholder="e.g. Lekki Phase 1, Oniru, Jabi"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-300"
                 />
               </div>
             </div>
 
-            {/* Estate & Private Exact Address */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Estate Name (Optional, Public)
+                  Estate Name (Optional)
                 </label>
                 <input
                   type="text"
                   value={estate}
                   onChange={(e) => setEstate(e.target.value)}
-                  placeholder="e.g. Periwinkle Lifestyle Estate"
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 outline-hidden"
+                  placeholder="e.g. Carlton Gate Estate"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-300"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>Exact Street Address</span>
-                  <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded">
-                    Private (Admin Only)
-                  </span>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Exact Street Address (Quarantined for Admin Only)
                 </label>
                 <input
                   type="text"
                   value={exactAddress}
                   onChange={(e) => setExactAddress(e.target.value)}
-                  placeholder="Plot 7, Coral Crescent, Periwinkle Estate"
-                  className="w-full text-xs p-2.5 rounded-xl border border-slate-300 outline-hidden bg-slate-50"
+                  placeholder="e.g. Plot 14, Block 8, Admiralty Way"
+                  className="w-full text-xs p-2 rounded-xl border border-slate-300 bg-amber-50/40"
                 />
               </div>
             </div>
           </div>
 
           {/* Specifications */}
-          <div className="border-t border-slate-100 pt-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-emerald-600" />
-              Property Specifications
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Property Specifications & Legal Title
             </h3>
-
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {category !== 'LAND' && (
                 <>
@@ -366,17 +460,22 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Bedrooms</label>
                     <input
                       type="number"
+                      min={0}
                       value={bedrooms}
                       onChange={(e) => setBedrooms(e.target.value)}
+                      placeholder="e.g. 4"
                       className="w-full text-xs p-2 rounded-xl border border-slate-300"
                     />
                   </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Bathrooms</label>
                     <input
                       type="number"
+                      min={0}
                       value={bathrooms}
                       onChange={(e) => setBathrooms(e.target.value)}
+                      placeholder="e.g. 4"
                       className="w-full text-xs p-2 rounded-xl border border-slate-300"
                     />
                   </div>
@@ -387,8 +486,10 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Land Size</label>
                 <input
                   type="number"
+                  min={0}
                   value={landSize}
                   onChange={(e) => setLandSize(e.target.value)}
+                  placeholder="e.g. 500"
                   className="w-full text-xs p-2 rounded-xl border border-slate-300"
                 />
               </div>
@@ -408,7 +509,7 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
             </div>
 
             {/* Title Document */}
-            <div className="mt-3">
+            <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
                 Title / Documentation Status
               </label>
@@ -427,31 +528,92 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
             </div>
           </div>
 
-          {/* Photo & Description */}
-          <div className="border-t border-slate-100 pt-4 space-y-3">
+          {/* Photo & Document Uploads */}
+          <div className="border-t border-slate-100 pt-4 space-y-4">
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+              Property Visuals & Verification Documents
+            </h3>
+
+            {/* Photo Upload */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
-                Cover Photo URL
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
+                  Cover Photo (Image Upload or URL) <span className="text-rose-500">*</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">Max 5MB</span>
               </label>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/..."
-                className="w-full text-xs p-2.5 rounded-xl border border-slate-300 outline-hidden font-mono"
-              />
+
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="Paste direct image URL or choose file &rarr;"
+                  className="flex-1 text-xs p-2.5 rounded-xl border border-slate-300 font-mono"
+                />
+                <label className="cursor-pointer px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-300 transition-colors flex items-center justify-center gap-1.5 shrink-0">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>{uploadingImage ? 'Uploading...' : 'Upload Image'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, 'IMAGE')}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {imageUrl && (
+                <div className="mt-2 relative w-36 h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                  <img src={imageUrl} alt="Property Preview" className="w-full h-full object-cover" />
+                </div>
+              )}
             </div>
 
+            {/* KYC Document Upload */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  Ownership / Title Deed Proof (Confidential KYC for Admin Review)
+                </span>
+                <span className="text-[10px] text-slate-400 font-normal">PDF or Image (Max 5MB)</span>
+              </label>
+
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl border border-dashed border-slate-300 transition-colors flex items-center gap-2">
+                  <Upload className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{uploadingDoc ? 'Uploading document...' : 'Attach Proof of Title Document'}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,image/*"
+                    onChange={(e) => handleFileUpload(e, 'DOCUMENT')}
+                    className="hidden"
+                  />
+                </label>
+
+                {kycDocUrl && (
+                  <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    {kycDocName || 'Document Attached'}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Description */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Detailed Description
+                Detailed Property Description <span className="text-rose-500">*</span>
               </label>
               <textarea
-                rows={3}
+                rows={4}
+                required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full text-xs p-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-hidden"
+                placeholder="Highlight floor plan, finishing, estate security, proximity to main hubs, power situation..."
+                className="w-full text-xs p-3 rounded-xl border border-slate-300 focus:border-emerald-600 outline-hidden leading-relaxed"
               />
             </div>
           </div>
@@ -462,6 +624,7 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
           <button
             type="button"
             onClick={onClose}
+            disabled={isSubmitting}
             className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:text-slate-900 rounded-xl"
           >
             Cancel
@@ -470,20 +633,22 @@ export const DraftPropertyModal: React.FC<Props> = ({ isOpen, onClose, draftToEd
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={handleSaveDraft}
-              className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs"
+              className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
             >
               <Save className="w-4 h-4 text-slate-600" />
-              Save Private Draft
+              {isSubmitting ? 'Saving...' : 'Save Private Draft'}
             </button>
 
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={handleSubmitForReview}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-md shadow-emerald-700/20"
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-md shadow-emerald-700/20 disabled:opacity-50"
             >
               <Send className="w-4 h-4" />
-              Submit for Admin Review
+              {isSubmitting ? 'Submitting...' : 'Submit for Admin Review'}
             </button>
           </div>
         </div>

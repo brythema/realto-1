@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMarketplace } from '../../context/MarketplaceContext';
 import { useAuth } from '../../context/AuthContext';
 import { ChangeRequest } from '../../types/change-request';
 import { Property } from '../../types/property';
+import { UserProfile } from '../../types/roles';
+import { api } from '../../services/api';
 import { formatNaira, formatDate, formatDateTime, getPropertyTypeLabel } from '../../utils/formatters';
 import {
   Shield,
@@ -28,7 +30,8 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ onSelectProperty }) => {
-  const { currentUser, users, updateUserStatus } = useAuth();
+  const { currentUser, updateUserStatus } = useAuth();
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const {
     properties,
     changeRequests,
@@ -60,6 +63,12 @@ export const AdminDashboard: React.FC<Props> = ({ onSelectProperty }) => {
   // Inbox state
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [adminReply, setAdminReply] = useState('');
+
+  useEffect(() => {
+    if (adminTab === 'users') {
+      api.admin.getUsers().then(setUsers).catch(console.error);
+    }
+  }, [adminTab]);
 
   // Selected request in queue
   const activeRequest =
@@ -461,7 +470,15 @@ export const AdminDashboard: React.FC<Props> = ({ onSelectProperty }) => {
                           </button>
 
                           <button
-                            onClick={() => adminTogglePropertyVisibility(prop.id, !prop.isPublic)}
+                            onClick={() =>
+                              adminTogglePropertyVisibility(
+                                prop.id,
+                                !prop.isPublic,
+                                prop.isPublic
+                                  ? 'Administrative unpublish from governance console'
+                                  : 'Administrative republish to public marketplace'
+                              )
+                            }
                             className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
                               prop.isPublic
                                 ? 'bg-amber-50 text-amber-800 hover:bg-amber-100'

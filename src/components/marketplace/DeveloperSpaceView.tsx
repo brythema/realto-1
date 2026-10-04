@@ -144,10 +144,10 @@ export const DeveloperSpaceView: React.FC<Props> = ({
             <div className="flex items-center gap-2">
               <Lock className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>
-                <strong className="text-white">Admin-Managed Escrow & Inquiries:</strong> In accordance with Realto governing standards, all inquiries, inspections, and escrow verification for {developer.companyName} listings are facilitated directly through Realto Administration.
+                <strong className="text-white">Admin-Facilitated Concierge & Inquiries:</strong> In accordance with Realto governing standards, all inquiries and inspection scheduling for {developer.companyName} listings are facilitated directly through Realto Administration. Direct personal developer contacts remain confidential.
               </span>
             </div>
-            <span className="text-[11px] text-emerald-400 font-semibold">Protected Deal Guarantee</span>
+            <span className="text-[11px] text-emerald-400 font-semibold">Protected Buyer Protocol</span>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { MarketplaceProvider, useMarketplace } from './context/MarketplaceContext';
 import { Navbar } from './components/navbar/Navbar';
@@ -31,6 +31,42 @@ const MarketplaceContent: React.FC = () => {
   const [inquiryProperty, setInquiryProperty] = useState<Property | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // URL synchronization helper
+  const updateUrl = (view: string, propId?: string | null, devSlug?: string | null) => {
+    const params = new URLSearchParams();
+    if (view && view !== 'marketplace') params.set('view', view);
+    if (propId) params.set('property', propId);
+    if (devSlug) params.set('developer', devSlug);
+
+    const query = params.toString();
+    const newUrl = query ? `?${query}` : window.location.pathname;
+    window.history.pushState({}, '', newUrl);
+  };
+
+  // URL Sync on Mount and PopState (Browser Back/Forward)
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const viewParam = params.get('view') || 'marketplace';
+      const propParam = params.get('property');
+      const devParam = params.get('developer');
+
+      setActiveView(viewParam);
+      setActiveDeveloperSlug(devParam);
+
+      if (propParam && publicProperties.length > 0) {
+        const found = publicProperties.find((p) => p.id === propParam || p.slug === propParam);
+        setSelectedProperty(found || null);
+      } else if (!propParam) {
+        setSelectedProperty(null);
+      }
+    };
+
+    handlePopState();
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [publicProperties]);
 
   // Search & Filter State
   const [filters, setFilters] = useState({
@@ -70,9 +106,26 @@ const MarketplaceContent: React.FC = () => {
     });
   }, [publicProperties, filters]);
 
+  const handleNavigateView = (view: string) => {
+    setActiveView(view);
+    updateUrl(view, selectedProperty?.id, activeDeveloperSlug);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleSelectDeveloperSpace = (slug: string) => {
     setActiveDeveloperSlug(slug);
     setActiveView('developer-space-detail');
+    updateUrl('developer-space-detail', null, slug);
+  };
+
+  const handleOpenProperty = (p: Property) => {
+    setSelectedProperty(p);
+    updateUrl(activeView, p.id, activeDeveloperSlug);
+  };
+
+  const handleCloseProperty = () => {
+    setSelectedProperty(null);
+    updateUrl(activeView, null, activeDeveloperSlug);
   };
 
   return (
@@ -80,10 +133,7 @@ const MarketplaceContent: React.FC = () => {
       {/* Top Navbar */}
       <Navbar
         activeView={activeView}
-        setActiveView={(v) => {
-          setActiveView(v);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
+        setActiveView={handleNavigateView}
         openCart={() => setIsCartOpen(true)}
         openNotifications={() => setIsNotificationsOpen(true)}
       />
@@ -114,7 +164,7 @@ const MarketplaceContent: React.FC = () => {
 
                 <div className="flex items-center gap-2 self-start sm:self-center">
                   <button
-                    onClick={() => setActiveView('developer-spaces')}
+                    onClick={() => handleNavigateView('developer-spaces')}
                     className="px-3.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold rounded-xl border border-purple-200 transition-colors flex items-center gap-1.5 shadow-2xs"
                   >
                     <Building2 className="w-3.5 h-3.5 text-purple-600" />
@@ -138,7 +188,7 @@ const MarketplaceContent: React.FC = () => {
                     <PropertyCard
                       key={prop.id}
                       property={prop}
-                      onSelect={(p) => setSelectedProperty(p)}
+                      onSelect={handleOpenProperty}
                       onInquire={(p) => setInquiryProperty(p)}
                       onViewDeveloperSpace={handleSelectDeveloperSpace}
                     />
@@ -153,7 +203,7 @@ const MarketplaceContent: React.FC = () => {
         {activeView === 'developer-spaces' && (
           <DeveloperSpacesDirectory
             onSelectDeveloperSpace={handleSelectDeveloperSpace}
-            onBackToFeed={() => setActiveView('marketplace')}
+            onBackToFeed={() => handleNavigateView('marketplace')}
           />
         )}
 
@@ -161,8 +211,8 @@ const MarketplaceContent: React.FC = () => {
         {activeView === 'developer-space-detail' && activeDeveloperSlug && (
           <DeveloperSpaceView
             developerSlug={activeDeveloperSlug}
-            onBack={() => setActiveView('developer-spaces')}
-            onSelectProperty={(p) => setSelectedProperty(p)}
+            onBack={() => handleNavigateView('developer-spaces')}
+            onSelectProperty={handleOpenProperty}
             onInquireProperty={(p) => setInquiryProperty(p)}
           />
         )}
@@ -172,17 +222,17 @@ const MarketplaceContent: React.FC = () => {
           <div>
             {currentRole === 'BUYER' ? (
               <BuyerDashboard
-                onSelectProperty={(p) => setSelectedProperty(p)}
+                onSelectProperty={handleOpenProperty}
                 onInquireProperty={(p) => setInquiryProperty(p)}
-                onBrowseMarketplace={() => setActiveView('marketplace')}
+                onBrowseMarketplace={() => handleNavigateView('marketplace')}
               />
             ) : currentRole === 'SELLER' || currentRole === 'DEVELOPER' ? (
               <SellerDeveloperDashboard
-                onSelectProperty={(p) => setSelectedProperty(p)}
+                onSelectProperty={handleOpenProperty}
                 onViewDeveloperSpace={handleSelectDeveloperSpace}
               />
             ) : currentRole === 'ADMIN' ? (
-              <AdminDashboard onSelectProperty={(p) => setSelectedProperty(p)} />
+              <AdminDashboard onSelectProperty={handleOpenProperty} />
             ) : (
               <div className="max-w-md mx-auto py-24 px-4 text-center">
                 <ShieldCheck className="w-12 h-12 text-slate-400 mx-auto mb-3" />
@@ -197,12 +247,12 @@ const MarketplaceContent: React.FC = () => {
 
         {/* VIEW 5: Admin Governance Hub */}
         {activeView === 'admin' && (
-          <AdminDashboard onSelectProperty={(p) => setSelectedProperty(p)} />
+          <AdminDashboard onSelectProperty={handleOpenProperty} />
         )}
       </main>
 
       {/* Footer */}
-      <Footer onNavigate={(v) => setActiveView(v)} />
+      <Footer onNavigate={handleNavigateView} />
 
       {/* Floating Concierge Button */}
       <WhatsAppFloatingButton />
@@ -210,9 +260,9 @@ const MarketplaceContent: React.FC = () => {
       {/* Modals & Slide-overs */}
       <PropertyDetailModal
         property={selectedProperty}
-        onClose={() => setSelectedProperty(null)}
+        onClose={handleCloseProperty}
         onInquire={(p) => {
-          setSelectedProperty(null);
+          handleCloseProperty();
           setInquiryProperty(p);
         }}
         onViewDeveloperSpace={handleSelectDeveloperSpace}
@@ -222,20 +272,20 @@ const MarketplaceContent: React.FC = () => {
         property={inquiryProperty}
         isOpen={!!inquiryProperty}
         onClose={() => setInquiryProperty(null)}
-        onViewThreads={() => setActiveView('dashboard')}
+        onViewThreads={() => handleNavigateView('dashboard')}
       />
 
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
-        onSelectProperty={(p) => setSelectedProperty(p)}
+        onSelectProperty={handleOpenProperty}
         onInquireProperty={(p) => setInquiryProperty(p)}
       />
 
       <NotificationDrawer
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
-        onNavigate={() => setActiveView('dashboard')}
+        onNavigate={() => handleNavigateView('dashboard')}
       />
     </div>
   );

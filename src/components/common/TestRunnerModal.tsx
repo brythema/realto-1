@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useMarketplace } from '../../context/MarketplaceContext';
-import { useAuth } from '../../context/AuthContext';
 import { Property, PropertyCategory, PropertyStatus, PropertyAvailability } from '../../types/property';
 import { ChangeRequest } from '../../types/change-request';
 import {
@@ -31,7 +30,6 @@ interface Props {
 
 export const TestRunnerModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { properties, developers, changeRequests } = useMarketplace();
-  const { users } = useAuth();
 
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<TestCaseResult[]>([]);

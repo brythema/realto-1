@@ -130,10 +130,13 @@ This dual-tier data architecture ensures freedom for sellers and developers whil
 +-----------------------------------------------------------------------------------+
 | LIVE MARKETPLACE DATA                                                             |
 |                                                                                   |
-|  1. Normalized images copied to public/properties/{id}/images/                    |
-|  2. Property status transitions to LIVE (`isPublic = true`)                       |
-|  3. Listing appears on Home Page & Developer Space (if >1 live)                   |
-|  4. Owner can no longer edit live fields directly!                                |
+|  1. Normalized images stored/approved                                            |
+|  2. Property status transitions to LIVE                                           |
+|  3. isPublic = true ONLY if owner accountStatus === 'ACTIVE' (Decision 003)        |
+|  4. If owner is PENDING_APPROVAL, listing remains isPublic = false until account   |
+|     registration is approved by Admin                                             |
+|  5. Listing appears on Home Page & Developer Space (if >= 2 live units)           |
+|  6. Owner can no longer edit live fields directly (Change Request required)       |
 +-----------------------------------------------------------------------------------+
                                   │
                       [ Owner Needs to Update Price/Specs ]

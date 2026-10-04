@@ -7,7 +7,7 @@ export interface Developer {
   logoUrl?: string;
   bannerUrl?: string;
   companyAddress: string; // Private
-  contactPerson: string; // Private
+  contactPerson?: string; // Private
   phone: string; // Private
   email: string; // Private
   website?: string; // Private
@@ -16,6 +16,8 @@ export interface Developer {
   hasDeveloperSpace: boolean; // Computed: livePropertiesCount >= 2
   verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
   verifiedAt?: string;
+  accreditationTier?: string;
+  joinedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

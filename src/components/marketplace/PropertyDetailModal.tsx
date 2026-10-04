@@ -86,13 +86,31 @@ export const PropertyDetailModal: React.FC<Props> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleShare}
+              onClick={() => {
+                const shareUrl = `${window.location.origin}/?property=${property.id}`;
+                navigator.clipboard?.writeText(shareUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
               className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors text-xs font-medium flex items-center gap-1"
-              title="Share listing"
+              title="Copy direct share link"
             >
               <Share2 className="w-4 h-4" />
-              {copied ? 'Copied Link' : 'Share'}
+              {copied ? 'Copied Link' : 'Copy Link'}
             </button>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(
+                `Check out this verified listing on Realto Nigeria:\n${property.title} (${formatNaira(
+                  property.price.amount
+                )})\n${window.location.origin}/?property=${property.id}`
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors text-xs font-bold flex items-center gap-1"
+              title="Share on WhatsApp"
+            >
+              WhatsApp
+            </a>
             <button
               onClick={() => toggleSaveProperty(property.id)}
               className={`p-2 rounded-lg transition-colors ${
@@ -317,7 +335,7 @@ export const PropertyDetailModal: React.FC<Props> = ({
           <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3">
             <Lock className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
             <div className="text-xs text-emerald-950 leading-relaxed">
-              <strong className="font-bold">Realto Buyer Protection Protocol:</strong> To protect buyers from Nigerian land title fraud, illegal dual-allocations, and bait-and-switch listings, all title verification, physical escrow inspections, and seller coordination are managed solely by Realto Platform Administration.
+              <strong className="font-bold">Realto Buyer Protection Protocol:</strong> To protect buyers from Nigerian land title fraud, illegal dual-allocations, and bait-and-switch listings, all title verification, physical site inspections, and inquiry routing are managed directly through Realto Platform Administration.
             </div>
           </div>
         </div>

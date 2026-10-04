@@ -94,9 +94,22 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Account Suspended Alert Banner */}
+      {accountStatus === 'SUSPENDED' && (
+        <div className="bg-rose-600 text-white rounded-3xl p-6 shadow-lg border border-rose-500 mb-8 flex items-start gap-4">
+          <AlertCircle className="w-6 h-6 text-white shrink-0 mt-0.5" />
+          <div>
+            <h2 className="text-lg font-bold">Account Access Suspended</h2>
+            <p className="text-xs text-rose-100 mt-1 leading-relaxed">
+              Your account and listings have been temporarily suspended by Realto Administration. You cannot create new drafts, edit listings, or submit requests. For inquiries or account reactivation, please contact governance@realto.ng.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Pending Account Review Banner */}
       <PendingReviewBanner
-        onOpenDraftModal={handleCreateNewDraft}
+        onOpenDraftModal={accountStatus === 'SUSPENDED' ? undefined : handleCreateNewDraft}
         onGoToSupport={() => setActiveTab('support')}
       />
 
@@ -105,7 +118,7 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-emerald-600/20">
-              {currentUser?.firstName[0]}
+              {currentUser?.firstName ? currentUser.firstName[0] : 'U'}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -118,6 +131,8 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
                   className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                     accountStatus === 'ACTIVE'
                       ? 'bg-emerald-100 text-emerald-800'
+                      : accountStatus === 'SUSPENDED'
+                      ? 'bg-rose-100 text-rose-800'
                       : 'bg-amber-100 text-amber-800'
                   }`}
                 >
@@ -136,7 +151,8 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleCreateNewDraft}
-              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+              disabled={accountStatus === 'SUSPENDED'}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
               <span>Create Private Draft</span>
@@ -312,8 +328,12 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
                       alt={draft.title}
                       className="w-full h-full object-cover"
                     />
-                    <span className="absolute top-3 left-3 px-2 py-0.5 bg-slate-900/80 text-white text-[10px] font-bold rounded-full">
-                      PRIVATE DRAFT
+                    <span
+                      className={`absolute top-3 left-3 px-2 py-0.5 text-white text-[10px] font-bold rounded-full ${
+                        draft.status === 'REJECTED' ? 'bg-rose-600' : 'bg-slate-900/80'
+                      }`}
+                    >
+                      {draft.status === 'REJECTED' ? 'REJECTED (NEEDS REVISION)' : 'PRIVATE DRAFT'}
                     </span>
                     <span className="absolute bottom-3 left-3 bg-slate-900/90 text-white px-2.5 py-1 rounded text-xs font-extrabold">
                       {formatNaira(draft.price.amount)}
@@ -329,6 +349,13 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
                       <p className="text-xs text-slate-500 mt-1">
                         {draft.location.area}, {draft.location.city}
                       </p>
+
+                      {draft.status === 'REJECTED' && draft.lastDecisionReason && (
+                        <div className="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-[11px] text-rose-800">
+                          <strong className="block text-rose-900">Admin Feedback:</strong>
+                          {draft.lastDecisionReason}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
@@ -346,14 +373,14 @@ export const SellerDeveloperDashboard: React.FC<Props> = ({
                           className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                          Edit
+                          {draft.status === 'REJECTED' ? 'Fix & Revise' : 'Edit'}
                         </button>
                         <button
                           onClick={() => submitDraftForReview(draft.id)}
                           className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1"
                         >
                           <Send className="w-3.5 h-3.5" />
-                          Submit
+                          {draft.status === 'REJECTED' ? 'Resubmit' : 'Submit'}
                         </button>
                       </div>
                     </div>
